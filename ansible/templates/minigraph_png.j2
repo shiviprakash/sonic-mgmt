@@ -166,6 +166,10 @@
 {% if vm_topo_config['dut_type'] in ['BackEndToRRouter', 'BackEndLeafRouter'] and 'dut_cluster' in vm_topo_config %}
 	      <ClusterName>{{ vm_topo_config['dut_cluster'] }}</ClusterName>
 {% endif %}
+{% if vm_topo_config['dut_subtype'] is defined %}
+{# Parsed into DEVICE_METADATA|localhost.subtype; FRR (zebra --kernel-mac-ext-learn) keys off "L3EvpnMH" #}
+        <SubType>{{ vm_topo_config['dut_subtype'] }}</SubType>
+{% endif %}
       </Device>
 {% if 'neighbor' in dual_tor_facts %}
 {% set neighbor_hostname = dual_tor_facts['neighbor']['hostname'] %}

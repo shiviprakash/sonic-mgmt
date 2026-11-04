@@ -349,7 +349,9 @@
     set_fact:
       dual_tor_facts: {}
       mux_cable_facts: {}
-    when: "'dualtor' not in topo"
+    # L3EvpnMH topos don't contain "dualtor" but still need dual_tor_facts
+    # (neighbor/loopback) populated below - exclude them from the reset.
+    when: "'dualtor' not in topo and vm_topo_config.dut_subtype | default('') != 'L3EvpnMH'"
 
   - name: gather dual ToR information
     dual_tor_facts:
@@ -361,7 +363,7 @@
       vlan_intfs: "{{ vlan_intfs }}"
       vlan_config: "{{ vlan_config | default(None) }}"
     delegate_to: localhost
-    when: "'dualtor' in topo or 'cable' in topo"
+    when: "'dualtor' in topo or 'cable' in topo or vm_topo_config.dut_subtype | default('') == 'L3EvpnMH'"
 
   - name: gather mux cable information
     mux_cable_facts:

@@ -13,6 +13,9 @@ except ImportError:
     sys.path.append('..')
     from ansible.module_utils.dualtor_utils import generate_mux_cable_facts
 
+# DUT subtype (topo configuration_properties.common.dut_subtype), also the config_db DEVICE_METADATA subtype
+EVPN_MH_SUBTYPE = 'L3EvpnMH'
+
 
 def load_topo_file(topo_name):
     """Load topo definition yaml file."""
@@ -114,12 +117,21 @@ class DualTorParser:
         '''
         Gathers facts related to a dual ToR configuration
         '''
-        if 'dualtor' in self.testbed_facts['topo']:
+        evpn_mh = self.vm_config.get('dut_subtype') == EVPN_MH_SUBTYPE
+        if 'dualtor' in self.testbed_facts['topo'] or evpn_mh:
             self.parse_neighbor_tor()
             self.parse_tor_position()
-            self.generate_cable_names()
             self.parse_loopback_ips()
-            self.generate_mux_cable_facts()
+            if evpn_mh:
+                # L3EvpnMH: no linkmgrd/MuxCable feature on the DUT,
+                # so skip MUX_CABLE-table fact generation entirely (it
+                # assumes an IPInIP MuxTunnel0 + mux_simulator model that
+                # doesn't apply here) - only the neighbor/loopback facts
+                # above (used by the DUT<->T2 EVPN sessions) are needed.
+                self.dual_tor_facts['evpn_enabled'] = True
+            else:
+                self.generate_cable_names()
+                self.generate_mux_cable_facts()
 
         return self.dual_tor_facts
 

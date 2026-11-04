@@ -160,9 +160,38 @@
 {% if tunnel_configs | length > 0 %}
       <TunnelInterfaces>
 {% for tunnel, tunnel_param in tunnel_configs.items() %}
+{% if tunnel_param['type'] == 'Vxlan' %}
+        <TunnelInterface Name="{{ tunnel }}" Type="{{ tunnel_param['type'] }}" AttachTo="{{ tunnel_param['attach_to'] }}" SourceIp="{{ tunnel_param['src_ip'] }}" EvpnNvo="{{ tunnel_param['evpn_nvo'] }}" />
+{% else %}
         <TunnelInterface Name="{{ tunnel }}" Type="{{ tunnel_param['type'] }}" AttachTo="{{ tunnel_param['attach_to'] }}" DifferentiatedServicesCodePointMode="{{ tunnel_param['dscp'] }}" EcnEncapsulationMode="{{ tunnel_param['ecn_encap'] }}" EcnDecapsulationMode="{{ tunnel_param['ecn_decap'] }}" TtlMode="{{ tunnel_param['ttl_mode'] }}" />
+{% endif %}
 {% endfor %}
       </TunnelInterfaces>
+{# PROPOSED SCHEMA EXTENSION (bgp-evpn-mh-lacp-dtor): VxlanEvpnNvo/VxlanTunnelMaps/
+   Vrfs are not part of the upstream minigraph.xsd today. Emitting them here
+   is a no-op until the sonic-buildimage minigraph.py parser is extended to
+   translate these into config_db's VXLAN_TUNNEL/VXLAN_EVPN_NVO/
+   VXLAN_TUNNEL_MAP/VRF tables - see the companion reference patch
+   (minigraph_parser_evpn_vxlan.py.patch) for the parser-side changes. #}
+{% for tunnel, tunnel_param in tunnel_configs.items() %}
+{% if tunnel_param['type'] == 'Vxlan' %}
+      <VxlanEvpnNvo Name="{{ tunnel_param['evpn_nvo'] }}" SourceVtep="{{ tunnel }}" />
+{% if tunnel_param['vlan_vni_map'] | length > 0 %}
+      <VxlanTunnelMaps>
+{% for vlan, vni in tunnel_param['vlan_vni_map'].items() %}
+        <VxlanTunnelMap Tunnel="{{ tunnel }}" Vlan="{{ vlan }}" Vni="{{ vni }}" />
+{% endfor %}
+      </VxlanTunnelMaps>
+{% endif %}
+{% if tunnel_param['vrf_vni_map'] | length > 0 %}
+      <Vrfs>
+{% for vrf, vni in tunnel_param['vrf_vni_map'].items() %}
+        <Vrf Name="{{ vrf }}" Tunnel="{{ tunnel }}" Vni="{{ vni }}" />
+{% endfor %}
+      </Vrfs>
+{% endif %}
+{% endif %}
+{% endfor %}
 {% endif %}
       <VlanInterfaces>
 {% if is_tor_dut | bool %}
@@ -190,6 +219,9 @@
           <Tag>{{ vlan_param['tag'] }}</Tag>
 {% if 'prefix' in vlan_param %}
           <Subnets>{{ vlan_param['prefix'] | ansible.utils.ipaddr('network') }}/{{ vlan_param['prefix'] | ansible.utils.ipaddr('prefix') }}</Subnets>
+{% endif %}
+{% if 'vrf' in vlan_param %}
+          <VrfName>{{ vlan_param['vrf'] }}</VrfName>
 {% endif %}
 {% if 'secondary_subnet' in vlan_param %}
           <SecondarySubnets>{{ vlan_param['secondary_subnet'] | ansible.utils.ipaddr('network') }}/{{ vlan_param['secondary_subnet'] | ansible.utils.ipaddr('prefix') }}</SecondarySubnets>

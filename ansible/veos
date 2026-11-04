@@ -87,6 +87,7 @@ all:
           - dualtor-mixed
           - dualtor-mixed-56
           - dualtor-mixed-120
+          - bgp-evpn-mh-lacp-dtor
           - m0
           - m0-2vlan
           - mc0

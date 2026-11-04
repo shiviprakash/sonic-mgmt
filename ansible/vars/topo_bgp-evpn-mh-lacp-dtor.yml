@@ -1,0 +1,346 @@
+# topo_bgp-evpn-mh-lacp-dtor.yml
+# BGP EVPN multihoming dual-ToR (dT0) topology with a PTF LACP server simulator.
+# Test plan: https://github.com/sonic-net/sonic-mgmt/pull/26752
+#
+# Notes:
+#   - No host_interfaces_active_active / disabled_host_interfaces, so add_topo.yml does not start
+#     nic_simulator. The topology name must not contain "dualtor" so mux_simulator is not started either.
+#   - Each server uses two separate PTF ports, one per DUT. A "0.N,1.N" pair would attach a single PTF
+#     port to both DUTs (mux-style) and cannot be a LAG member.
+#   - lacp_servers describes the Linux 802.3ad bond built in PTF over each server's two ports.
+#   - Server ip/gateway are hardcoded for the default one_vlan_a (Vlan1000 192.168.0.1/21).
+#     TODO: revisit if two_vlan_a is used (servers would need 192.168.0.x/22 and 192.168.4.x/22).
+#   - Two servers only (DUT ports 1 and 2), which is enough for the DS, US and SS cases.
+#
+# PTF port layout: 0-3 server ports, 4-11 T2 uplinks.
+#   server 1: bond0 = eth0 (DUT0 port 1) + eth1 (DUT1 port 1)
+#   server 2: bond1 = eth2 (DUT0 port 2) + eth3 (DUT1 port 2)
+
+topology:
+  dut_num: 2
+  host_interfaces:
+    - 0.1@0
+    - 1.1@1
+    - 0.2@2
+    - 1.2@3
+  lacp_servers:
+    - bond: bond0
+      members: [0, 1]
+      bond_mac: 00:11:22:33:44:a1
+      mac: 00:11:22:33:44:01
+      mode: 802.3ad
+      lacp_rate: fast
+      miimon: 100
+      min_links: 1
+      ip: 192.168.0.2/21
+      gateway: 192.168.0.1
+      portchannel: PortChannel1
+    - bond: bond1
+      members: [2, 3]
+      bond_mac: 00:11:22:33:44:a2
+      mac: 00:11:22:33:44:02
+      mode: 802.3ad
+      lacp_rate: fast
+      miimon: 100
+      min_links: 1
+      ip: 192.168.0.3/21
+      gateway: 192.168.0.1
+      portchannel: PortChannel2
+  VMs:
+    ARISTA01T2:
+      vlans:
+        - "0.28@4"
+        - "1.28@5"
+      vm_offset: 0
+    ARISTA02T2:
+      vlans:
+        - "0.29@6"
+        - "1.29@7"
+      vm_offset: 1
+    ARISTA03T2:
+      vlans:
+        - "0.30@8"
+        - "1.30@9"
+      vm_offset: 2
+    ARISTA04T2:
+      vlans:
+        - "0.31@10"
+        - "1.31@11"
+      vm_offset: 3
+  DUT:
+    # DUT-side LAGs: intfs are DUT port indexes (same on both DUTs). The PTF-side bond members
+    # (PTF port indexes spanning both DUTs) are in lacp_servers[].members, never in this block.
+    portchannel_config:
+      PortChannel1:
+        intfs: [1]
+      PortChannel2:
+        intfs: [2]
+    loopback:
+      ipv4:
+        - 10.1.0.32/32
+        - 10.1.0.33/32
+      ipv6:
+        - FC00:1:0:32::/128
+        - FC00:1:0:33::/128
+    loopback1:
+      ipv4:
+        - 10.1.0.34/32
+        - 10.1.0.34/32
+      ipv6:
+        - FC00:1:0:34::/128
+        - FC00:1:0:34::/128
+    loopback2:
+      ipv4:
+        - 10.1.0.36/32
+        - 10.1.0.36/32
+      ipv6:
+        - FC00:1:0:36::/128
+        - FC00:1:0:36::/128
+    loopback3:
+      ipv4:
+        - 10.1.0.38/32
+        - 10.1.0.39/32
+      ipv6:
+        - FC00:1:0:38::/128
+        - FC00:1:0:39::/128
+    vlan_configs:
+      default_vlan_config: one_vlan_a
+      one_vlan_a:
+        Vlan1000:
+          id: 1000
+          intfs: []
+          portchannels: [PortChannel1, PortChannel2]
+          prefix: 192.168.0.1/21
+          prefix_v6: fc02:1000::1/64
+          tag: 1000
+          mac: 00:aa:bb:cc:dd:ee
+      two_vlan_a:
+        Vlan100:
+          id: 100
+          intfs: []
+          portchannels: [PortChannel1]
+          prefix: 192.168.0.1/22
+          prefix_v6: fc02:100::1/64
+          tag: 100
+          mac: 00:aa:bb:cc:dd:ee
+          vrf: Vrf01
+        Vlan200:
+          id: 200
+          intfs: []
+          portchannels: [PortChannel2]
+          prefix: 192.168.4.1/22
+          prefix_v6: fc02:200::1/64
+          tag: 200
+          mac: 00:aa:bb:cc:dd:ee
+          vrf: Vrf01
+    tunnel_configs:
+      default_tunnel_config: tunnel_vxlan_evpn
+      tunnel_vxlan_evpn:
+        VxlanTunnel0:
+          type: Vxlan
+          attach_to: Loopback0
+          src_ip: Loopback0
+          evpn_nvo: nvo
+          # Only the entries of the active vlan_configs variant are programmed.
+          vlan_vni_map:
+            Vlan1000: 1000   # one_vlan_a
+            Vlan100: 100     # two_vlan_a
+            Vlan200: 200     # two_vlan_a
+          # L3VNI (symmetric IRB), used only with two_vlan_a.
+          vrf_vni_map:
+            Vrf01: 50000
+    l3vni_configs:
+      default_l3vni_config: vrf01_l3vni
+      vrf01_l3vni:
+        vrf: Vrf01
+        vni: 50000
+        anchor_vlan:
+          id: 3999
+          tag: 3999
+    evpn_configs:
+      # Same values on both DUTs. One system MAC is shared by the pair (also used as the LACP system ID, so each
+      # server sees a single partner). ESI type-3 = 03:<system-mac>:<3-byte local discriminator>, with the
+      # discriminator set to the PortChannel number, so every server LAG gets its own ESI.
+      default_evpn_config: evpn_mh
+      evpn_mh:
+        system_mac: "00:44:33:22:11:00"
+        esi_type: type-3-mac-based
+        segments:
+          PortChannel1:
+            esi: "03:00:44:33:22:11:00:00:00:01"
+          PortChannel2:
+            esi: "03:00:44:33:22:11:00:00:00:02"
+        l2vni:
+          Vlan1000: 1000
+        l3vni:
+          vrf: Vrf01
+          vni: 50000
+        route_target: auto
+        all_active: true
+        route_types:
+          ad_per_es: true
+          ad_per_evi: true
+          mac_ip: true
+          imet: false
+          es_route: false
+        # EVPN is enabled on the existing DUT<->T2 link eBGP sessions (same neighbors as dualtor, no new
+        # sessions). The minigraph parser has no EVPN support, so this is meant to be delivered through
+        # CONFIG_DB (golden config): BGP_GLOBALS_AF|default|l2vpn_evpn (advertise-all-vni) and
+        # BGP_NEIGHBOR_AF|default|<T2 link IP>|l2vpn_evpn. Not consumed yet.
+        # REVISIT: DUT Loopback0 <-> T2 Loopback0 multihop EVPN sessions, if the link sessions are not
+        # enough. Previous implementation saved in ~/evpn-mh-loopback-multihop.patch.
+        t2_evpn_peers:
+          type: ebgp
+          session: link
+          address_families:
+            - l2vpn evpn
+          advertise_all_vni: true
+        # Both DUTs share dut_asn, so every DUT-to-T2 session needs allowas-in.
+        allowas_in:
+          ipv4: true
+          ipv6: true
+          l2vpn_evpn: true
+    lacp_configs:
+      # DUT side of each server LAG. The PTF side is lacp_servers above.
+      default_lacp_config: server_lacp
+      server_lacp:
+        mode: active
+        rate: fast
+        min_links: 1
+        system_priority: 32768
+        portchannels: [PortChannel1, PortChannel2]
+
+configuration_properties:
+  common:
+    dut_asn: 65100
+    dut_type: ToRRouter
+    dut_subtype: L3EvpnMH
+    swrole: leaf
+    nhipv4: 10.10.246.254
+    nhipv6: FC0A::FF
+    l2vpn_evpn: true
+
+configuration:
+  ARISTA01T2:
+    properties:
+    - common
+    bgp:
+      asn: 64600
+      peers:
+        65100:
+        - 10.0.0.56
+        - FC00::71
+        - 10.0.1.56
+        - FC00::1:71
+    interfaces:
+      Loopback0:
+        ipv4: 100.1.0.29/32
+        ipv6: 2064:100::1d/128
+      Ethernet1:
+        lacp: 1
+        dut_index: 0
+      Ethernet2:
+        lacp: 2
+        dut_index: 1
+      Port-Channel1:
+        ipv4: 10.0.0.57/31
+        ipv6: fc00::72/126
+      Port-Channel2:
+        ipv4: 10.0.1.57/31
+        ipv6: fc00::1:72/126
+    bp_interface:
+      ipv4: 10.10.246.29/24
+      ipv6: fc0a::1d/64
+
+  ARISTA02T2:
+    properties:
+    - common
+    bgp:
+      asn: 64600
+      peers:
+        65100:
+        - 10.0.0.58
+        - FC00::75
+        - 10.0.1.58
+        - FC00::1:75
+    interfaces:
+      Loopback0:
+        ipv4: 100.1.0.30/32
+        ipv6: 2064:100::1e/128
+      Ethernet1:
+        lacp: 1
+        dut_index: 0
+      Ethernet2:
+        lacp: 2
+        dut_index: 1
+      Port-Channel1:
+        ipv4: 10.0.0.59/31
+        ipv6: fc00::76/126
+      Port-Channel2:
+        ipv4: 10.0.1.59/31
+        ipv6: fc00::1:76/126
+    bp_interface:
+      ipv4: 10.10.246.30/24
+      ipv6: fc0a::1e/64
+
+  ARISTA03T2:
+    properties:
+    - common
+    bgp:
+      asn: 64600
+      peers:
+        65100:
+        - 10.0.0.60
+        - FC00::79
+        - 10.0.1.60
+        - FC00::1:79
+    interfaces:
+      Loopback0:
+        ipv4: 100.1.0.31/32
+        ipv6: 2064:100::1f/128
+      Ethernet1:
+        lacp: 1
+        dut_index: 0
+      Ethernet2:
+        lacp: 2
+        dut_index: 1
+      Port-Channel1:
+        ipv4: 10.0.0.61/31
+        ipv6: fc00::7a/126
+      Port-Channel2:
+        ipv4: 10.0.1.61/31
+        ipv6: fc00::1:7a/126
+    bp_interface:
+      ipv4: 10.10.246.31/24
+      ipv6: fc0a::1f/64
+
+  ARISTA04T2:
+    properties:
+    - common
+    bgp:
+      asn: 64600
+      peers:
+        65100:
+        - 10.0.0.62
+        - FC00::7D
+        - 10.0.1.62
+        - FC00::1:7D
+    interfaces:
+      Loopback0:
+        ipv4: 100.1.0.32/32
+        ipv6: 2064:100::20/128
+      Ethernet1:
+        lacp: 1
+        dut_index: 0
+      Ethernet2:
+        lacp: 2
+        dut_index: 1
+      Port-Channel1:
+        ipv4: 10.0.0.63/31
+        ipv6: fc00::7e/126
+      Port-Channel2:
+        ipv4: 10.0.1.63/31
+        ipv6: fc00::1:7e/126
+    bp_interface:
+      ipv4: 10.10.246.32/24
+      ipv6: fc0a::20/64

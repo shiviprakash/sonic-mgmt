@@ -146,7 +146,11 @@
 {% if tunnel_configs | length > 0 %}
       <TunnelInterfaces>
 {% for tunnel, tunnel_param in tunnel_configs.items() %}
+{% if tunnel_param['type'] == 'Vxlan' %}
+        <TunnelInterface Name="{{ tunnel }}" Type="{{ tunnel_param['type'] }}" AttachTo="{{ tunnel_param['attach_to'] }}" SourceIp="{{ tunnel_param['src_ip'] }}" EvpnNvo="{{ tunnel_param['evpn_nvo'] }}" />
+{% else %}
         <TunnelInterface Name="{{ tunnel }}" Type="{{ tunnel_param['type'] }}" AttachTo="{{ tunnel_param['attach_to'] }}" DifferentiatedServicesCodePointMode="{{ tunnel_param['dscp'] }}" EcnEncapsulationMode="{{ tunnel_param['ecn_encap'] }}" EcnDecapsulationMode="{{ tunnel_param['ecn_decap'] }}" TtlMode="{{ tunnel_param['ttl_mode'] }}" />
+{% endif %}
 {% endfor %}
       </TunnelInterfaces>
 {% endif %}

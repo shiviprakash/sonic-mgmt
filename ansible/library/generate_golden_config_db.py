@@ -1330,6 +1330,33 @@ class GenerateGoldenConfigDBModule(object):
 
         return json.dumps(golden_config_db, indent=4)
 
+    def generate_evpn_mh_golden_config_db(self):
+        """
+        Generate golden config for the L3EvpnMH (EVPN multihoming) topology.
+
+        The minigraph parser has no EVPN support, so EVPN tables will have to come from CONFIG_DB here.
+        For now only the LACP fast rate on the server-facing PortChannels is set.
+        """
+        rc, out, err = self.module.run_command("sonic-cfggen -H -m -j /etc/sonic/init_cfg.json --print-data")
+        if rc != 0:
+            self.module.fail_json(msg="Failed to get config from minigraph: {}".format(err))
+        ori_config_db = json.loads(out)
+        golden_config_db = {}
+
+        if "DEVICE_METADATA" in ori_config_db:
+            golden_config_db["DEVICE_METADATA"] = ori_config_db["DEVICE_METADATA"]
+            golden_config_db["DEVICE_METADATA"]["localhost"]["buffer_model"] = "traditional"
+
+        # Server-facing LAGs run LACP fast (1 s PDUs, 3 s timeout): the DUT's timeout flag is what makes the
+        # server send PDUs fast, so the DUT must not stay on the slow default.
+        portchannels = ori_config_db.get("PORTCHANNEL", {})
+        for portchannel_config in portchannels.values():
+            portchannel_config["fast_rate"] = "true"
+        if portchannels:
+            golden_config_db["PORTCHANNEL"] = portchannels
+
+        return json.dumps(golden_config_db, indent=4)
+
     def override_port_table_from_platform(self, config):
         """
         Rebuild the PORT table from port_speeds + platform.json.
@@ -1488,7 +1515,10 @@ class GenerateGoldenConfigDBModule(object):
     def generate(self):
         module_msg = "Success to generate golden_config_db.json"
         # topo check
-        if self.topo_name == "mx" or "m0" in self.topo_name:
+        if "evpn-mh" in self.topo_name:
+            config = self.generate_evpn_mh_golden_config_db()
+            module_msg = module_msg + " for L3EvpnMH"
+        elif self.topo_name == "mx" or "m0" in self.topo_name:
             config = self.generate_mgfx_golden_config_db()
             module_msg = module_msg + " for mgfx"
             self.module.run_command("sudo rm -f {}".format(TEMP_DHCP_SERVER_CONFIG_PATH))

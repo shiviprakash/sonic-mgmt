@@ -319,6 +319,8 @@ class ParseTestbedTopoinfo():
             vm_topo_config['dut_type'] = topo_definition['configuration_properties']['common']['dut_type']
             if 'dut_cluster' in topo_definition['configuration_properties']['common']:
                 vm_topo_config['dut_cluster'] = topo_definition['configuration_properties']['common']['dut_cluster']
+            if 'dut_subtype' in topo_definition['configuration_properties']['common']:
+                vm_topo_config['dut_subtype'] = topo_definition['configuration_properties']['common']['dut_subtype']
             vm_topo_config['vm'] = self.parse_topo_defintion(
                 topo_definition, po_map, dut_num, 'VMs')
 
