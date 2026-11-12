@@ -7,14 +7,16 @@
 #     nic_simulator. The topology name must not contain "dualtor" so mux_simulator is not started either.
 #   - Each server uses two separate PTF ports, one per DUT. A "0.N,1.N" pair would attach a single PTF
 #     port to both DUTs (mux-style) and cannot be a LAG member.
-#   - lacp_servers describes the Linux 802.3ad bond built in PTF over each server's two ports.
-#   - Server ip/gateway are hardcoded for the default one_vlan_a (Vlan1000 192.168.0.1/21).
-#     TODO: revisit if two_vlan_a is used (servers would need 192.168.0.x/22 and 192.168.4.x/22).
-#   - Two servers only (DUT ports 1 and 2), which is enough for the DS, US and SS cases.
+#   - ptf_emulated_lacp_hosts describes the hosts emulated inside the PTF container. Each host has a LACP LAG
+#     (lag_backend: teamd or bond) over its two PTF ports in the root netns, plus a macvlan carrying the host
+#     MAC/IP in a separate per-host netns (named after the entry, e.g. ce1).
+#   - Host ip/gateway are hardcoded for the default one_vlan_a (Vlan1000 192.168.0.1/21).
+#     TODO: revisit if two_vlan_a is used (hosts would need 192.168.0.x/22 and 192.168.4.x/22).
+#   - Two hosts only (DUT ports 1 and 2), which is enough for the DS, US and SS cases.
 #
-# PTF port layout: 0-3 server ports, 4-11 T2 uplinks.
-#   server 1: bond0 = eth0 (DUT0 port 1) + eth1 (DUT1 port 1)
-#   server 2: bond1 = eth2 (DUT0 port 2) + eth3 (DUT1 port 2)
+# PTF port layout: 0-3 host ports, 4-11 T2 uplinks.
+#   ce1: bond0 = eth0 (DUT0 port 1) + eth1 (DUT1 port 1)
+#   ce2: bond1 = eth2 (DUT0 port 2) + eth3 (DUT1 port 2)
 
 topology:
   dut_num: 2
@@ -23,25 +25,25 @@ topology:
     - 1.1@1
     - 0.2@2
     - 1.2@3
-  lacp_servers:
-    - bond: bond0
+  ptf_emulated_lacp_hosts:
+    - name: ce1
+      lag: bond0
+      lag_backend: teamd
       members: [0, 1]
-      bond_mac: 00:11:22:33:44:a1
+      lag_mac: 00:11:22:33:44:a1
       mac: 00:11:22:33:44:01
-      mode: 802.3ad
       lacp_rate: fast
-      miimon: 100
       min_links: 1
       ip: 192.168.0.2/21
       gateway: 192.168.0.1
       portchannel: PortChannel1
-    - bond: bond1
+    - name: ce2
+      lag: bond1
+      lag_backend: teamd
       members: [2, 3]
-      bond_mac: 00:11:22:33:44:a2
+      lag_mac: 00:11:22:33:44:a2
       mac: 00:11:22:33:44:02
-      mode: 802.3ad
       lacp_rate: fast
-      miimon: 100
       min_links: 1
       ip: 192.168.0.3/21
       gateway: 192.168.0.1
@@ -69,7 +71,7 @@ topology:
       vm_offset: 3
   DUT:
     # DUT-side LAGs: intfs are DUT port indexes (same on both DUTs). The PTF-side bond members
-    # (PTF port indexes spanning both DUTs) are in lacp_servers[].members, never in this block.
+    # (PTF port indexes spanning both DUTs) are in ptf_emulated_lacp_hosts[].members, never in this block.
     portchannel_config:
       PortChannel1:
         intfs: [1]
@@ -201,7 +203,7 @@ topology:
           ipv6: true
           l2vpn_evpn: true
     lacp_configs:
-      # DUT side of each server LAG. The PTF side is lacp_servers above.
+      # DUT side of each host LAG. The PTF side is ptf_emulated_lacp_hosts above.
       default_lacp_config: server_lacp
       server_lacp:
         mode: active

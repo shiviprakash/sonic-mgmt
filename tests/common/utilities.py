@@ -1089,10 +1089,10 @@ def flush_permanent_neighbors(duthost):
     )
 
 
-def is_lacp_server_sim_topology(tbinfo):
+def is_ptf_emulated_lacp_hosts_topology(tbinfo):
     """
-    @summary: Check if the topology uses the PTF LACP server simulator (L3 EVPN multihoming).
-              PTF ports there are bond members with servers in per-server netns, so the
+    @summary: Check if the topology uses hosts emulated in the PTF container over LACP LAGs (L3 EVPN multihoming).
+              PTF ports there are LAG members with hosts in per-host netns, so the
               dualtor/T0 PTF responders and MAC/IP rewrites must not run on them.
     @param tbinfo: Testbed information dictionary
     @return: bool
